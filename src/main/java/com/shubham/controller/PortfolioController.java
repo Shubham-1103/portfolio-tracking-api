@@ -41,7 +41,7 @@ public class PortfolioController {
 
     @GetMapping("portfolio")
     public ResponseEntity<?> getPortfolio() {
-        log.info("User requested the security details");
+        log.info("User requested the portfolio details");
         List<Security> securities = portfolioTrackerService.getPortfolioOfUser();
         return securities.isEmpty()
                 ? ResponseEntity.of(Optional.of("No securities found. Please make a trade first!"))
