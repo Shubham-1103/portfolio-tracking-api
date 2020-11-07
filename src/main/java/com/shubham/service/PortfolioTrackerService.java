@@ -20,8 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static com.shubham.util.Util.getWeightedAveragePrice;
-import static com.shubham.util.Util.validateTradePriceAndShares;
+import static com.shubham.util.Util.*;
 
 @Slf4j
 @Service
@@ -92,9 +91,7 @@ public class PortfolioTrackerService {
     }
 
     /**
-     * r
-     *
-     * @return
+     * @return the list of securities of the user
      */
 
     public List<Security> getPortfolioOfUser() {
@@ -105,6 +102,15 @@ public class PortfolioTrackerService {
     }
 
     //first valid trade.
+
+    /**
+     * this method insert the {@link TradeDto} and {@link SecurityDto} of the user in the database
+     * and returns {@link TradeValidation} that includes the final response from the API
+     *
+     * @param trade: {@link Trade} trade that user made.
+     * @return {@link TradeValidation} this is a model that contains if the trade made by the user
+     * is valid or not and the Response if the trade is not a valid trade.
+     */
     public TradeValidation insertToTradeAndSecurity(Trade trade) {
         SecurityDto securityDto = getSecurityDtoFromTrade(trade);
         TradeDto tradeDto = Trade.getTradeDto(trade);
@@ -115,21 +121,11 @@ public class PortfolioTrackerService {
                 .build();
     }
 
-
-    private SecurityDto getSecurityDtoFromTrade(Trade trade) {
-        Security security = Security.builder()
-                .tickerSymbol(trade.getTicker())
-                .shares(trade.getShares())
-                .avgBuyPrice(trade.getPrice())
-                .build();
-        return Security.getSecurityDto(security);
-    }
-
     /**
      * This function insert the {@link Trade} to the database and
      * updates the {@link Security} information of the user iff the validation succeeds.
      *
-     * @param trade:           {@link Trade} trade that user made.
+     * @param trade:          {@link Trade} trade that user made.
      * @param oldsecurityDto: {@link SecurityDto} current state of security for the user
      * @return {@link TradeValidation} this is a model that contains if the trade made by the user
      * is valid or not and the Response if the trade is not a valid trade.
@@ -161,7 +157,7 @@ public class PortfolioTrackerService {
      * // in case of Selling we need not to update the price only shares will be updated
      * remember basic validation on share is already applied that we can not sell more share than we own.
      *
-     * @param trade:               {@link Trade} model on the basis of which operations will be performed
+     * @param trade:              {@link Trade} model on the basis of which operations will be performed
      * @param oldSecurityDetails: {@link SecurityDto} existing security details which needs to be updated after the final operations.
      * @return updated {@link SecurityDto} object that needs to be stored in the DB.
      */

@@ -2,6 +2,7 @@ package com.shubham.util;
 
 import com.shubham.dto.SecurityDto;
 import com.shubham.enums.TradeType;
+import com.shubham.models.Security;
 import com.shubham.models.Trade;
 import com.shubham.models.TradeValidation;
 import org.springframework.http.ResponseEntity;
@@ -112,6 +113,20 @@ public class Util {
                         .multiply(BigDecimal.valueOf(trade.getShares().longValue())))
                 .divide(BigDecimal.valueOf(trade.getShares()
                         .add(oldSecurityDetails.getShares()).longValue()), MathContext.DECIMAL32);
+    }
+
+    /**
+     * Utility method to get {@link SecurityDto} from the {@link Trade} model
+     * @param trade: {@link Trade}
+     * @return {@link SecurityDto}
+     */
+    public static SecurityDto getSecurityDtoFromTrade(Trade trade) {
+        Security security = Security.builder()
+                .tickerSymbol(trade.getTicker())
+                .shares(trade.getShares())
+                .avgBuyPrice(trade.getPrice())
+                .build();
+        return Security.getSecurityDto(security);
     }
 
 }
