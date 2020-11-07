@@ -15,10 +15,10 @@ import java.math.BigInteger;
 @Data
 @Builder
 @Entity
-@Table(name = "portfolio")
+@Table(name = "securities")
 @NoArgsConstructor
 @AllArgsConstructor
-public class PortfolioDto {
+public class SecurityDto {
     @Id
     @Column(name = "ticker_symbol")
     private String tickerSymbol;
