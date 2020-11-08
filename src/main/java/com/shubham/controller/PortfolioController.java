@@ -110,7 +110,13 @@ public class PortfolioController {
     @DeleteMapping("trade/{id}")
     public ResponseEntity<?> deleteTrade(@PathVariable String id) {
         log.info("User Requested for deletion of trade with trade id: {}", id);
-        TradeValidation tradeValidation = portfolioTrackerService.deleteTrade(Long.parseLong(id));
+        TradeValidation tradeValidation;
+        try {
+            tradeValidation = portfolioTrackerService.deleteTrade(Long.parseLong(id));
+        } catch (NumberFormatException exception) {
+            log.error("Trade id should be in digits");
+            return ResponseEntity.badRequest().body(Optional.of("Please enter a trade Id in valid format"));
+        }
         return tradeValidation.getResponseEntity();
     }
 
