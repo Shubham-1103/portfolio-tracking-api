@@ -44,11 +44,11 @@ public class PortfolioController {
     @ApiOperation(value = "fetches Portfolio for of the user",
             notes = "API that fetches all the securities of the user if the portfolio details not found returns 404")
     @GetMapping("portfolio")
-    public ResponseEntity<?> getPortfolio() {
+    public ResponseEntity<List<Security>> getPortfolio() {
         log.info("User requested the portfolio details");
         List<Security> securities = portfolioTrackerService.getPortfolioOfUser();
         return securities.isEmpty()
-                ? new ResponseEntity<>("No securities found. Please make a trade first!", HttpStatus.NOT_FOUND)
+                ? ResponseEntity.status(HttpStatus.NOT_FOUND).body(securities)
                 : new ResponseEntity<>(securities, HttpStatus.OK);
     }
 
@@ -105,8 +105,9 @@ public class PortfolioController {
         return new ResponseEntity<>(optionalBigDecimal.get(), HttpStatus.OK);
     }
 
-    @ApiOperation(value = "Deletes a trade corresponding to trade id", notes = "this api removes the specified trade and updates the portfolio details " +
-            "of the user correspond to the ticker")
+    @ApiOperation(value = "Deletes a trade corresponding to trade id",
+            notes = "this api removes the specified trade and updates the portfolio details " +
+                    "of the user correspond to the ticker")
     @DeleteMapping("trade/{id}")
     public ResponseEntity<?> deleteTrade(@PathVariable String id) {
         log.info("User Requested for deletion of trade with trade id: {}", id);
@@ -119,6 +120,5 @@ public class PortfolioController {
         }
         return tradeValidation.getResponseEntity();
     }
-
 
 }

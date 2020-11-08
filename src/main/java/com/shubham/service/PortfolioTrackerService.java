@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.MathContext;
 import java.util.List;
 import java.util.Optional;
@@ -179,7 +180,9 @@ public class PortfolioTrackerService {
             security.setShares(security.getShares().subtract(trade.getShares()));
             security.setAvgBuyPrice(security.getAvgBuyPrice());
             security.setTotalPrice(security.getTotalPrice().subtract(price));
-            if (Action.DELETE == action) {
+            if (BigInteger.ZERO.equals(security.getShares())) {
+                security.setAvgBuyPrice(BigDecimal.ZERO);
+            } else if (Action.DELETE == action) {
                 BigDecimal averagePrice = security.getTotalPrice().divide(
                         BigDecimal.valueOf(security.getShares().intValue()), MathContext.DECIMAL32
                 );
@@ -228,7 +231,11 @@ public class PortfolioTrackerService {
         TradeValidation tradeValidation = validateTradePriceAndShares(security);
         if (tradeValidation.isValid()) {
             tradeRepo.deleteById(id);
-            securitiesRepo.save(Security.getSecurityDto(security));
+            if (security.getShares().compareTo(BigInteger.ZERO) == 0) {
+                securitiesRepo.delete(Security.getSecurityDto(security));
+            } else {
+                securitiesRepo.save(Security.getSecurityDto(security));
+            }
             tradeValidation.setResponseEntity(new ResponseEntity<>(trade, HttpStatus.OK));
             return tradeValidation;
         }

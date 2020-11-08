@@ -1,6 +1,8 @@
 package com.shubham.models;
 
 import com.shubham.dto.SecurityDto;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,10 +16,14 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@ApiModel(description = "All details about the security")
 public class Security {
     private String tickerSymbol;
+    @ApiModelProperty(notes = "Average price per ticker")
     private BigDecimal avgBuyPrice;
+    @ApiModelProperty(notes = "Total shares per ticker")
     private BigInteger shares;
+    @ApiModelProperty(notes = "Total price per ticker")
     private BigDecimal totalPrice;
 
     public static SecurityDto getSecurityDto(Security security) {
