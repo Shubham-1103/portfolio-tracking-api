@@ -2,6 +2,7 @@ package com.shubham.service;
 
 import com.shubham.dto.SecurityDto;
 import com.shubham.dto.TradeDto;
+import com.shubham.enums.Action;
 import com.shubham.enums.TradeType;
 import com.shubham.models.Security;
 import com.shubham.models.Trade;
@@ -15,12 +16,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
+import java.math.MathContext;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static com.shubham.util.Util.*;
+import static com.shubham.util.Util.getSecurityDtoFromTrade;
+import static com.shubham.util.Util.validateTradePriceAndShares;
 
 @Slf4j
 @Service
@@ -33,10 +35,10 @@ public class PortfolioTrackerService {
     /**
      * Gets security corresponding to a ticker.
      *
-     * @return security corresponding to a ticker.
+     * @return security corresponding to a ticker
      */
-    public Optional<SecurityDto> getSecurityByTicker(String ticker) {
-        return securitiesRepo.findById(ticker);
+    public Optional<Security> getSecurityByTicker(String ticker) {
+        return securitiesRepo.findById(ticker).map(Security::getSecurityModel);
     }
 
     /**
@@ -65,7 +67,7 @@ public class PortfolioTrackerService {
      * @return the total amount return per security.
      */
     private BigDecimal calculateReturn(SecurityDto securityDto) {
-        return BigDecimal.valueOf(100) // Default current price value.
+        return getCurrentPrice(securityDto)
                 .subtract(securityDto.getAvgBuyPrice())
                 .multiply(BigDecimal.valueOf(securityDto.getShares().longValue()));
     }
@@ -75,8 +77,8 @@ public class PortfolioTrackerService {
      *
      * @return {@link TradeDto} by trade Id
      */
-    public Optional<TradeDto> getTradeById(Long id) {
-        return tradeRepo.findById(id);
+    public Optional<Trade> getTradeById(Long id) {
+        return tradeRepo.findById(id).map(Trade::getTradeModel);
     }
 
     /**
@@ -101,8 +103,6 @@ public class PortfolioTrackerService {
                 .collect(Collectors.toList());
     }
 
-    //first valid trade.
-
     /**
      * this method insert the {@link TradeDto} and {@link SecurityDto} of the user in the database
      * and returns {@link TradeValidation} that includes the final response from the API
@@ -114,10 +114,10 @@ public class PortfolioTrackerService {
     public TradeValidation insertToTradeAndSecurity(Trade trade) {
         SecurityDto securityDto = getSecurityDtoFromTrade(trade);
         TradeDto tradeDto = Trade.getTradeDto(trade);
-        tradeRepo.save(tradeDto);
+        TradeDto updatedTrade = tradeRepo.save(tradeDto);
         securitiesRepo.save(securityDto);
         return TradeValidation.builder().isValid(true)
-                .responseEntity(new ResponseEntity<>(trade, HttpStatus.OK))
+                .responseEntity(new ResponseEntity<>(Trade.getTradeModel(updatedTrade), HttpStatus.CREATED))
                 .build();
     }
 
@@ -125,19 +125,19 @@ public class PortfolioTrackerService {
      * This function insert the {@link Trade} to the database and
      * updates the {@link Security} information of the user iff the validation succeeds.
      *
-     * @param trade:          {@link Trade} trade that user made.
-     * @param oldsecurityDto: {@link SecurityDto} current state of security for the user
+     * @param trade:    {@link Trade} trade that user made.
+     * @param security: {@link Security} current state of security for the user
      * @return {@link TradeValidation} this is a model that contains if the trade made by the user
      * is valid or not and the Response if the trade is not a valid trade.
      */
-    public TradeValidation insertToTradeAndUpdateSecurity(Trade trade, SecurityDto oldsecurityDto) {
+    public TradeValidation insertToTradeAndUpdateSecurity(Trade trade, Security security) {
         TradeDto tradeDto = Trade.getTradeDto(trade);
-        SecurityDto updatedSecurity = getUpdatedSecurity(trade, oldsecurityDto);
-        TradeValidation tradeValidation = validateTradePriceAndShares(updatedSecurity);
+        updateSecurity(Action.UPDATE, trade, security);
+        TradeValidation tradeValidation = validateTradePriceAndShares(security);
         if (tradeValidation.isValid()) {
-            tradeRepo.save(tradeDto);
-            securitiesRepo.save(updatedSecurity);
-            tradeValidation.setResponseEntity(new ResponseEntity<>(trade, HttpStatus.OK));
+            TradeDto newTradeDto = tradeRepo.save(tradeDto);
+            securitiesRepo.save(Security.getSecurityDto(security));
+            tradeValidation.setResponseEntity(new ResponseEntity<>(Trade.getTradeModel(newTradeDto), HttpStatus.OK));
         }
         return tradeValidation;
     }
@@ -157,22 +157,82 @@ public class PortfolioTrackerService {
      * // in case of Selling we need not to update the price only shares will be updated
      * remember basic validation on share is already applied that we can not sell more share than we own.
      *
-     * @param trade:              {@link Trade} model on the basis of which operations will be performed
-     * @param oldSecurityDetails: {@link SecurityDto} existing security details which needs to be updated after the final operations.
-     * @return updated {@link SecurityDto} object that needs to be stored in the DB.
+     * @param trade:    {@link Trade} model on the basis of which operations will be performed
+     * @param security: {@link Security} existing security details which needs to be updated after the final operations.
      */
-    private SecurityDto getUpdatedSecurity(Trade trade, SecurityDto oldSecurityDetails) {
-        Security newSecurity = Security.builder().tickerSymbol(trade.getTicker()).build();
-        if (trade.getTradeType() == TradeType.SELL) {
-            BigInteger totalRemainingShares = oldSecurityDetails.getShares().subtract(trade.getShares());
-            newSecurity.setShares(totalRemainingShares);
-            newSecurity.setAvgBuyPrice(oldSecurityDetails.getAvgBuyPrice());
-        } else {
-            BigInteger totalShares = oldSecurityDetails.getShares().add(trade.getShares());
-            newSecurity.setShares(totalShares);
-            BigDecimal averagePrice = getWeightedAveragePrice(trade, oldSecurityDetails);
-            newSecurity.setAvgBuyPrice(averagePrice);
+    private void updateSecurity(Action action, Trade trade, Security security) {
+        BigDecimal tradeShares = BigDecimal.valueOf(trade.getShares().longValue());
+        BigDecimal price = calculateTotalPriceAdjustment(trade, security, tradeShares);
+        if (Action.DELETE == action) {
+            trade.setTradeType(TradeType.BUY == trade.getTradeType() ? TradeType.SELL : TradeType.BUY);
         }
-        return Security.getSecurityDto(newSecurity);
+        if (trade.getTradeType() == TradeType.BUY) {
+            security.setShares(security.getShares().add(trade.getShares()));
+            security.setTotalPrice(security.getTotalPrice().add(price));
+            if (Action.DELETE != action) {
+                BigDecimal averagePrice = security.getTotalPrice().divide(
+                        BigDecimal.valueOf(security.getShares().intValue()), MathContext.DECIMAL32
+                );
+                security.setAvgBuyPrice(averagePrice);
+            }
+        } else {
+            security.setShares(security.getShares().subtract(trade.getShares()));
+            security.setAvgBuyPrice(security.getAvgBuyPrice());
+            security.setTotalPrice(security.getTotalPrice().subtract(price));
+            if (Action.DELETE == action) {
+                BigDecimal averagePrice = security.getTotalPrice().divide(
+                        BigDecimal.valueOf(security.getShares().intValue()), MathContext.DECIMAL32
+                );
+                security.setAvgBuyPrice(averagePrice);
+            }
+        }
     }
+
+    /**
+     * @param trade              {@link Trade} model on the basis of which operations will be performed
+     * @param oldSecurityDetails {@link Security} existing security details which needs to be updated after the final operations.
+     * @param tradeShares        no of shares user make trade of.
+     * @return the amount that needs to be added or subtracted on the basis of type of trade made.
+     */
+    private BigDecimal calculateTotalPriceAdjustment(Trade trade, Security oldSecurityDetails, BigDecimal tradeShares) {
+        return TradeType.BUY == trade.getTradeType() ?
+                tradeShares.multiply(trade.getPrice()) :
+                tradeShares.multiply(oldSecurityDetails.getTotalPrice())
+                        .divide(BigDecimal.valueOf(oldSecurityDetails.getShares().longValue()), MathContext.DECIMAL32);
+    }
+
+    /**
+     * @return Current price of a security by it's ticker.
+     */
+    private BigDecimal getCurrentPrice(SecurityDto securityDto) {
+        return BigDecimal.valueOf(100);
+    }
+
+    public TradeValidation deleteTrade(Long id) {
+        Optional<Trade> optionalTrade = tradeRepo.findById(id).map(Trade::getTradeModel);
+        if (!optionalTrade.isPresent()) {
+            return TradeValidation.builder().isValid(false)
+                    .responseEntity(new ResponseEntity<>(String.format("Trade with id %s is not found", id), HttpStatus.NOT_FOUND))
+                    .build();
+        }
+        Trade trade = optionalTrade.get();
+        Optional<Security> securityOptional = getSecurityByTicker(trade.getTicker());
+        if (!securityOptional.isPresent()) {
+            log.error("No security found with ticker : {}", trade.getTicker());
+            return TradeValidation.builder().isValid(false)
+                    .responseEntity(new ResponseEntity<>(String.format("No security found with ticker : %s", trade.getTicker()), HttpStatus.NOT_FOUND))
+                    .build();
+        }
+        Security security = securityOptional.get();
+        updateSecurity(Action.DELETE, trade, security);
+        TradeValidation tradeValidation = validateTradePriceAndShares(security);
+        if (tradeValidation.isValid()) {
+            tradeRepo.deleteById(id);
+            securitiesRepo.save(Security.getSecurityDto(security));
+            tradeValidation.setResponseEntity(new ResponseEntity<>(trade, HttpStatus.OK));
+            return tradeValidation;
+        }
+        return tradeValidation;
+    }
+
 }

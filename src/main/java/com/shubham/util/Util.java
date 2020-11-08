@@ -30,30 +30,30 @@ public class Util {
      * @return {@link TradeValidation} this is a model that contains if the trade made by the user
      * is valid or not and the Response if the trade is not a valid trade.
      */
-    public static BiFunction<Trade, Optional<SecurityDto>, TradeValidation> validateTrade = (trade, optionalSecurity) -> {
+    public static BiFunction<Trade, Optional<Security>, TradeValidation> validateTrade = (trade, optionalSecurity) -> {
         Assert.notNull(trade.getShares(), "Shares information not submitted");
         Assert.notNull(trade.getPrice(), "Price information  not submitted");
         //basic validations
         if (0 <= BigInteger.ZERO.compareTo(trade.getShares())) {
             return TradeValidation.builder().isValid(false)
-                    .responseEntity(ResponseEntity.of(Optional.of("Share value must be greater than 0")))
+                    .responseEntity(ResponseEntity.badRequest().body(Optional.of("Share value must be greater than 0")))
                     .build();
         } else if (0 <= BigDecimal.ZERO.compareTo(trade.getPrice())) {
             return TradeValidation.builder().isValid(false)
-                    .responseEntity(ResponseEntity.of(Optional.of("Price value must be greater than 0")))
+                    .responseEntity(ResponseEntity.badRequest().body(Optional.of("Price value must be greater than 0")))
                     .build();
         } else if (TradeType.SELL == trade.getTradeType()) {
             if (!optionalSecurity.isPresent()) {
                 return TradeValidation.builder()
                         .isValid(false)
-                        .responseEntity(ResponseEntity.of(Optional.of("Please buy some shares to make a sell trade with us.")))
+                        .responseEntity(ResponseEntity.badRequest().body(Optional.of("Please buy some shares to make a sell trade with us.")))
                         .build();
             }
-            SecurityDto security = optionalSecurity.get();
+            Security security = optionalSecurity.get();
             BigInteger remainingShares = security.getShares().subtract(trade.getShares());
             if (0 < BigInteger.ZERO.compareTo(remainingShares)) {
                 return TradeValidation.builder().isValid(false)
-                        .responseEntity(ResponseEntity.of(Optional.of("You cannot sell more shares than you own")))
+                        .responseEntity(ResponseEntity.badRequest().body(Optional.of("You cannot sell more shares than you own")))
                         .build();
             }
         }
@@ -62,7 +62,7 @@ public class Util {
     public static Function<BigInteger, TradeValidation> validateShares = (shares) -> {
         if (0 < BigInteger.ZERO.compareTo(shares)) {
             return TradeValidation.builder().isValid(false)
-                    .responseEntity(ResponseEntity.of(Optional.of("Invalid trade making share count to negative")))
+                    .responseEntity(ResponseEntity.badRequest().body(Optional.of("Invalid trade making share count negative")))
                     .build();
         }
         return TradeValidation.builder().isValid(true).build();
@@ -70,12 +70,11 @@ public class Util {
     public static Function<BigDecimal, TradeValidation> validatePrice = (price) -> {
         if (0 < BigDecimal.ZERO.compareTo(price)) {
             return TradeValidation.builder().isValid(false)
-                    .responseEntity(ResponseEntity.of(Optional.of("Invalid trade making price to negative")))
+                    .responseEntity(ResponseEntity.badRequest().body(Optional.of("Invalid trade making price negative")))
                     .build();
         }
         return TradeValidation.builder().isValid(true).build();
     };
-
 
     private Util() {
 
@@ -84,13 +83,13 @@ public class Util {
     /**
      * checks for basic validations that after making trade the avg buy price and share should not be less than 0.
      *
-     * @param updatedSecurity: {@link SecurityDto} current state of security for the user
+     * @param updatedSecurity: {@link Security} current state of security for the user
      * @return {@link TradeValidation} this is a model that contains if the trade made by the user
      * is valid or not and the Response if the trade is not a valid trade.
      */
-    public static TradeValidation validateTradePriceAndShares(SecurityDto updatedSecurity) {
+    public static TradeValidation validateTradePriceAndShares(Security updatedSecurity) {
 
-        TradeValidation priceValidation = validatePrice.apply(updatedSecurity.getAvgBuyPrice());
+        TradeValidation priceValidation = validatePrice.apply(updatedSecurity.getTotalPrice());
         TradeValidation shareValidation = validateShares.apply(updatedSecurity.getShares());
 
         if (priceValidation.isValid() && shareValidation.isValid()) {
@@ -100,23 +99,8 @@ public class Util {
     }
 
     /**
-     * this method calculates the weighted average price of the stocks.
-     *
-     * @param trade              : {@link Trade}
-     * @param oldSecurityDetails {@link SecurityDto}
-     * @return weighed average buy price of the stocks
-     */
-    public static BigDecimal getWeightedAveragePrice(Trade trade, SecurityDto oldSecurityDetails) {
-        return oldSecurityDetails.getAvgBuyPrice()
-                .multiply(BigDecimal.valueOf(oldSecurityDetails.getShares().longValue()))
-                .add(trade.getPrice()
-                        .multiply(BigDecimal.valueOf(trade.getShares().longValue())))
-                .divide(BigDecimal.valueOf(trade.getShares()
-                        .add(oldSecurityDetails.getShares()).longValue()), MathContext.DECIMAL32);
-    }
-
-    /**
      * Utility method to get {@link SecurityDto} from the {@link Trade} model
+     *
      * @param trade: {@link Trade}
      * @return {@link SecurityDto}
      */
@@ -125,6 +109,7 @@ public class Util {
                 .tickerSymbol(trade.getTicker())
                 .shares(trade.getShares())
                 .avgBuyPrice(trade.getPrice())
+                .totalPrice(trade.getPrice().multiply(BigDecimal.valueOf(trade.getShares().longValue())))
                 .build();
         return Security.getSecurityDto(security);
     }

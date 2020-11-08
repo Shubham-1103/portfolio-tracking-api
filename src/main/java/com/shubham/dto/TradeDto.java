@@ -3,7 +3,7 @@ package com.shubham.dto;
 import com.shubham.enums.TradeType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import javax.persistence.*;
@@ -11,9 +11,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Instant;
 
-@Data
-@Entity
 @Builder
+@Entity
+@Getter
 @Table(name = "trade_info")
 @NoArgsConstructor
 @AllArgsConstructor
