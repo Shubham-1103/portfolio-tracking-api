@@ -1,9 +1,11 @@
 package com.shubham.service;
 
+import com.shubham.client.RestApiClient;
 import com.shubham.dto.SecurityDto;
 import com.shubham.dto.TradeDto;
 import com.shubham.enums.Action;
 import com.shubham.enums.TradeType;
+import com.shubham.models.QuoteList;
 import com.shubham.models.Security;
 import com.shubham.models.Trade;
 import com.shubham.models.TradeValidation;
@@ -18,6 +20,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -32,6 +36,8 @@ public class PortfolioTrackerService {
     private SecuritiesRepo securitiesRepo;
     @Autowired
     private TradeRepo tradeRepo;
+    @Autowired
+    private RestApiClient restApiClient;
 
     /**
      * Gets security corresponding to a ticker.
@@ -208,7 +214,12 @@ public class PortfolioTrackerService {
      * @return Current price of a security by it's ticker.
      */
     private BigDecimal getCurrentPrice(SecurityDto securityDto) {
-        return BigDecimal.valueOf(100);
+        String ticker = securityDto.getTickerSymbol();
+        QuoteList quoteList = restApiClient.getQuotes(new ArrayList<>(Collections.singleton(ticker)));
+        if(quoteList.getData().isEmpty()){
+            return BigDecimal.valueOf(100);
+        }
+        return quoteList.getData().get(0).getPrice();
     }
 
     public TradeValidation deleteTrade(Long id) {

@@ -1,9 +1,12 @@
 package com.shubham.controller;
 
 
+import com.shubham.client.RestApiClient;
+import com.shubham.dto.TradeDto;
 import com.shubham.models.Security;
 import com.shubham.models.Trade;
 import com.shubham.models.TradeValidation;
+import com.shubham.repo.TradeRepo;
 import com.shubham.service.PortfolioTrackerService;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
@@ -23,20 +26,37 @@ import static com.shubham.util.Util.validateTrade;
 public class PortfolioController {
     @Autowired
     private PortfolioTrackerService portfolioTrackerService;
+    @Autowired
+    private TradeRepo tradeRepo;
+    @Autowired
+    private RestApiClient restApiClient;
 
     @ApiOperation(value = "Insert/update the trade and security of the user",
             notes = "This is the core api which is used to update and create trades for the user." +
                     "The trade RequestBody is validated and then trade and securities of the user is updated. ")
     @PostMapping("trade")
     public ResponseEntity<?> insertOrUpdateTrade(@RequestBody Trade trade) {
-        log.info("User requested to make a trade");
-        Optional<Security> optionalSecurity = portfolioTrackerService.getSecurityByTicker(trade.getTicker());
+        log.info("User requested to add a trade");
+        Optional<Security> optionalSecurity = Optional.empty();
         TradeValidation tradeValidation = validateTrade.apply(trade, optionalSecurity);
         if (!tradeValidation.isValid()) {
             return tradeValidation.getResponseEntity();
         }
-        if (!optionalSecurity.isPresent()) {
-            return portfolioTrackerService.insertToTradeAndSecurity(trade).getResponseEntity();
+        return portfolioTrackerService.insertToTradeAndSecurity(trade).getResponseEntity();
+
+    }
+
+    @PutMapping("update-trade")
+    public ResponseEntity<?> updateTrade(@RequestBody Trade trade) {
+        log.info("User requested to update a trade");
+        Optional<TradeDto> optionalTradeDto = tradeRepo.findById(trade.getTradeId());
+        if (!optionalTradeDto.isPresent()) {
+            return new ResponseEntity<>(String.format("No trade found to update with the id : %s", trade.getTradeId()), HttpStatus.NOT_FOUND);
+        }
+        Optional<Security> optionalSecurity = portfolioTrackerService.getSecurityByTicker(trade.getTicker());
+        TradeValidation tradeValidation = validateTrade.apply(trade, optionalSecurity);
+        if (!tradeValidation.isValid()) {
+            return tradeValidation.getResponseEntity();
         }
         return portfolioTrackerService.insertToTradeAndUpdateSecurity(trade, optionalSecurity.get()).getResponseEntity();
     }
